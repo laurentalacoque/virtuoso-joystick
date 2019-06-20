@@ -1,0 +1,86 @@
+pyIpc = ipcBeginProcess("./joystick_reader.py " "" 'myIpcDataHandler 'myIpcErrHandler 'myIpcFinishHandler "/tmp/py.log")
+
+procedure(myIpcDataHandler(ipcId data)
+  let((result)
+    ;printf("in myIpcDataHandler with %L\n" data)
+    foreach(d parseString(data "\n")
+        unless(errset(result=evalstring(d))
+             printf("ERROR: %L\n" errset.errset)
+             ipcWriteProcess(ipcId sprintf(nil "ERROR %L\n" errset.errset))
+        ) ; unless
+    )
+  )
+)
+
+procedure(myIpcErrHandler(ipcId data)
+    println(list("ERROR: myIpcErrHandler called with:" ipcId data))
+)
+
+procedure(myIpcFinishHandler(ipcId data)
+  let((exitStatus)
+    printf("Finished at %s: %L %L  " getCurrentTime() ipcId data)
+    exitStatus = ipcGetExitStatus(ipcId)
+    printf("Return value = %L\n" exitStatus)
+    if(exitStatus==0 then
+        printf("The IPC call has finished!!\n")
+    else
+        printf("**ERROR: operation failed\n")
+    )
+  )
+)
+
+procedure(mySkillCommand(data)
+    println(data)
+    ;ipcWriteProcess(pyIpc "Skill says hello")
+)
+
+procedure(ButtonChange(number value)
+    printf("Button %d -> %d\n" number value)
+)
+
+procedure(JoystickChange(axis value)
+    printf("Joystick change (axis: %d, value %d)\n" axis value)
+    if( axis == 2 then
+        w = hiGetCurrentWindow()
+        wtype = w~>cellView~>cellViewType
+        if(wtype == "maskLayout" then target = 10 ; 10m at max zoom
+            else target = 4 ; 2 units in symbol and schematic
+        )
+        bb = w~>cellView~>bBox
+        maxval = max(car(cadr(bb)) cadr(cadr(bb)))
+
+        scaletarget = maxval / target
+
+        value = value + 32767 ; 0 -> 65534
+        value = value / 662.0 ; 0 -> 99
+        value = (value / 99) * scaletarget
+        value = value + 1 ; 1 -> maxscale
+        printf("Setting scale at %.1f\n" value)
+        hiZoomAbsoluteScale(hiGetCurrentWindow() value)
+        )
+)
+
+procedure(JoystickValue(axis value)
+    if( axis == 0 then
+        if( value > 0 then
+            geScroll(nil "e" nil)
+            else
+            geScroll(nil "w" nil)
+        )
+    )
+    if( axis == 1 then
+        if( value > 0 then
+            geScroll(nil "s" nil)
+            else
+            geScroll(nil "n" nil)
+        )
+    )
+)
+
+procedure(CurrentState(bstate jstate)
+    printf("\nCurrent state:\n\t%s\n\t%s\n\n" bstate jstate)
+)
+
+procedure(EventError(message)
+    printf("*ERROR* %s\n" message)
+)
